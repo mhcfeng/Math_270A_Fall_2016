@@ -419,12 +419,37 @@ void runBenchmark()
     }
 }
 
+template <class T> class Givens{
+public:
+  T c;
+  T s;
+  inline Givens(T a,T b) {
+    T d = a*a + b*b;
+    if (d==0) {
+      c=1;
+      s=0;
+    }
+    else {
+      T t = 1/sqrt(d);
+      c = a*t;
+      s = -b*t;
+    }
+  }
+};
+
+template <class T> class Jacobi{
+public:
+};
+
 void My_SVD(const Eigen::Matrix2f& F,Eigen::Matrix2f& U,Eigen::Matrix2f& sigma,Eigen::Matrix2f& V){
 //
 //Compute the SVD of input F with sign conventions discussed in class and in assignment
 //
 //input: F
 //output: U,sigma,V with F=U*sigma*V.transpose() and U*U.transpose()=V*V.transpose()=I;
+
+Eigen::Matrix2f C;
+C=F.transpose()*F;
 
 }
 
