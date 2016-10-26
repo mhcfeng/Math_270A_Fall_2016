@@ -467,10 +467,6 @@ public:
   }
 };
 
-void printMatrix(const Eigen::Matrix2f M) {
-  std::cout << M(0,0) << "\t" << M(0,1) <<"\n" << M(1,0) << "\t" << M(1,1) << std::endl;
-}
-
 void flipSign(Eigen::Matrix2f& M) {
   float tempa=M(0,1);
   float tempb=M(1,1);
@@ -502,7 +498,6 @@ else {
 
 Eigen::Matrix2f A;
 
-printMatrix(A);
 Givens<float> GivensStep(A(0,0), A(1,0));
 U << GivensStep.c, GivensStep.s, -GivensStep.s, GivensStep.c;
 
@@ -526,12 +521,42 @@ else if (!det_U_negative && det_V_negative) {
 
 }
 
+float largest(float a, float b, float c) {
+  return std::max(std::max(a,b),c);
+}
+
 void My_Polar(const Eigen::Matrix3f& F,Eigen::Matrix3f& R,Eigen::Matrix3f& S){
   //
   //Compute the polar decomposition of input F (with det(R)=1)
   //
   //input: F
   //output: R,s with F=R*S and R*R.transpose()=I and S=S.transpose()
+
+  R << 1,0,0,0,1,0,0,0,1;
+  S=F;
+
+  int it=0;
+  int max_it = 1000;
+  float tol=.0001;
+  while(it < max_it && largest(std::abs(S(1,0)-S(0,1)),std::abs(S(2,0)-S(0,2)),std::abs(S(2,1)-S(1,2))) > tol) {
+    for(int i=0; i<2; i++) {
+      for(int j=i+1;j<3;j++) {
+        Givens<float> GivensStep(S(i,i)+S(j,j),S(j,i)-S(i,j));
+        Eigen::Matrix3f G;
+
+        G << 1,0,0,0,1,0,0,0,1;
+
+        G(i,i) = GivensStep.c;
+        G(j,j) = G(i,i);
+        G(i,j) = GivensStep.s;
+        G(j,i) = -G(i,j);
+
+        R=R*G;
+        S=G.transpose()*S;
+      }
+    }
+    it++;
+  }
 
 }
 
@@ -550,6 +575,11 @@ int main()
   //Eigen::Matrix2f F,U,sigma,V;
   //F << 3948.2093, 232.30293, 0.238493852,0.00034895984;
   //My_SVD(F,U,sigma,V);
+
+  Eigen::Matrix3f F,R,S;
+
+  F << 1,2,3,4,5,6,7,8,9;
+  My_Polar(F,R,S);
   bool run_benchmark = false;
   if (run_benchmark) runBenchmark();
 }
