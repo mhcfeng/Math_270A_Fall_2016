@@ -439,7 +439,44 @@ public:
 
 template <class T> class Jacobi{
 public:
+  T c;
+  T s;
+  T sigma_1;
+  T sigma_2;
+  inline Jacobi(Eigen::Matrix<T,2,2> M) {
+    if(M(1,0)==0) {
+      c=1;
+      s=0;
+      sigma_1=M(0,0);
+      sigma_2=M(1,1);
+    }
+    else{
+      T tau = (M(1,1)-M(0,0))/(2*M(1,0));
+      T t;
+      if (tau>0) {
+        t = -1/(tau +sqrt(1+tau*tau));
+      }
+      else {
+        t = -1/(tau-sqrt(1+tau*tau));
+      }
+      c = 1/sqrt(t*t+1);
+      s = t*c;
+      sigma_1 = c*c*M(0,0) + 2*c*s*M(0,1) + s*s*M(1,1);
+      sigma_2 = s*s*M(0,0) - 2*c*s*M(0,1) + c*c*M(1,1);
+    }
+  }
 };
+
+void printMatrix(const Eigen::Matrix2f M) {
+  std::cout << M(0,0) << "\t" << M(0,1) <<"\n" << M(1,0) << "\t" << M(1,1) << std::endl;
+}
+
+void flipSign(Eigen::Matrix2f& M) {
+  float tempa=M(0,1);
+  float tempb=M(1,1);
+  M(0,1) = -tempa;
+  M(1,1) = -tempb;
+}
 
 void My_SVD(const Eigen::Matrix2f& F,Eigen::Matrix2f& U,Eigen::Matrix2f& sigma,Eigen::Matrix2f& V){
 //
@@ -448,8 +485,44 @@ void My_SVD(const Eigen::Matrix2f& F,Eigen::Matrix2f& U,Eigen::Matrix2f& sigma,E
 //input: F
 //output: U,sigma,V with F=U*sigma*V.transpose() and U*U.transpose()=V*V.transpose()=I;
 
+bool det_V_negative = false;
+bool det_U_negative = false;
 Eigen::Matrix2f C;
 C=F.transpose()*F;
+Jacobi<float> JacobiStep(C);
+if(JacobiStep.sigma_1 >= JacobiStep.sigma_2) {
+  V << JacobiStep.c, -JacobiStep.s, JacobiStep.s, JacobiStep.c;
+  sigma << sqrt(JacobiStep.sigma_1), 0, 0, sqrt(JacobiStep.sigma_2);
+}
+else {
+  V << -JacobiStep.s, JacobiStep.c, JacobiStep.c, JacobiStep.s;
+  sigma << sqrt(JacobiStep.sigma_2),0,0,sqrt(JacobiStep.sigma_1);
+  det_V_negative = true;
+}
+
+Eigen::Matrix2f A;
+
+printMatrix(A);
+Givens<float> GivensStep(A(0,0), A(1,0));
+U << GivensStep.c, GivensStep.s, -GivensStep.s, GivensStep.c;
+
+if ((U.transpose()*A)(1,1)<0) {
+  U << GivensStep.c, -GivensStep.s, -GivensStep.s, -GivensStep.c;
+  det_U_negative = true;
+}
+
+if(det_U_negative && det_V_negative) {
+  flipSign(U);
+  flipSign(V);
+}
+else if (det_U_negative && !det_V_negative) {
+  flipSign(sigma);
+  flipSign(U);
+}
+else if (!det_U_negative && det_V_negative) {
+  flipSign(sigma);
+  flipSign(U);
+}
 
 }
 
@@ -474,6 +547,9 @@ void My_Polar(const Eigen::Matrix3f& F,Eigen::Matrix3f& R,Eigen::Matrix3f& S){
 
 int main()
 {
+  //Eigen::Matrix2f F,U,sigma,V;
+  //F << 3948.2093, 232.30293, 0.238493852,0.00034895984;
+  //My_SVD(F,U,sigma,V);
   bool run_benchmark = false;
   if (run_benchmark) runBenchmark();
 }
