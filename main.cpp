@@ -419,10 +419,10 @@ void runBenchmark()
     }
 }
 
-template <class T> class Givens{
+template <class T> class Givens{ // Implements Givens Rotation
 public:
-  T c;
-  T s;
+  T c; // cosine
+  T s; // sine
   inline Givens(T a,T b) {
     T d = a*a + b*b;
     if (d==0) {
@@ -437,12 +437,12 @@ public:
   }
 };
 
-template <class T> class Jacobi{
+template <class T> class Jacobi{ // Implements Jacobi Rotation
 public:
-  T c;
-  T s;
-  T sigma_1;
-  T sigma_2;
+  T c; // cosine
+  T s; // sine
+  T sigma_1; // first diagonal value
+  T sigma_2; // second diagonal value
   inline Jacobi(Eigen::Matrix<T,2,2> M) {
     if(M(1,0)==0) {
       c=1;
@@ -463,6 +463,8 @@ public:
       s = t*c;
       sigma_1 = c*c*M(0,0) + 2*c*s*M(0,1) + s*s*M(1,1);
       sigma_2 = s*s*M(0,0) - 2*c*s*M(0,1) + c*c*M(1,1);
+      if(sigma_1 <0) {sigma_1 = 0;}
+      if(sigma_2 < 0) {sigma_2 = 0;}
     }
   }
 };
@@ -485,27 +487,30 @@ bool det_V_negative = false;
 bool det_U_negative = false;
 Eigen::Matrix2f C;
 C=F.transpose()*F;
-Jacobi<float> JacobiStep(C);
-if(JacobiStep.sigma_1 >= JacobiStep.sigma_2) {
+Jacobi<float> JacobiStep(C); // compute V and Sigma with Jacobi Step
+if(JacobiStep.sigma_1 >= JacobiStep.sigma_2) { // fills V and Sigma
   V << JacobiStep.c, -JacobiStep.s, JacobiStep.s, JacobiStep.c;
   sigma << sqrt(JacobiStep.sigma_1), 0, 0, sqrt(JacobiStep.sigma_2);
 }
 else {
-  V << -JacobiStep.s, JacobiStep.c, JacobiStep.c, JacobiStep.s;
+  V << -JacobiStep.s, JacobiStep.c, JacobiStep.c, JacobiStep.s; // fills V and Sigma flipped so that first diagonal is larger
   sigma << sqrt(JacobiStep.sigma_2),0,0,sqrt(JacobiStep.sigma_1);
   det_V_negative = true;
 }
 
 Eigen::Matrix2f A;
+A=F*V;
 
 Givens<float> GivensStep(A(0,0), A(1,0));
-U << GivensStep.c, GivensStep.s, -GivensStep.s, GivensStep.c;
+U << GivensStep.c, GivensStep.s, -GivensStep.s, GivensStep.c; // compute U with Givens step
+
 
 if ((U.transpose()*A)(1,1)<0) {
-  U << GivensStep.c, -GivensStep.s, -GivensStep.s, -GivensStep.c;
+  U << GivensStep.c, -GivensStep.s, -GivensStep.s, -GivensStep.c; // flips U as necessary
   det_U_negative = true;
 }
 
+// Corrects for flipped U and V as necessary
 if(det_U_negative && det_V_negative) {
   flipSign(U);
   flipSign(V);
@@ -516,7 +521,7 @@ else if (det_U_negative && !det_V_negative) {
 }
 else if (!det_U_negative && det_V_negative) {
   flipSign(sigma);
-  flipSign(U);
+  flipSign(V);
 }
 
 }
@@ -544,6 +549,7 @@ void My_Polar(const Eigen::Matrix3f& F,Eigen::Matrix3f& R,Eigen::Matrix3f& S){
         Givens<float> GivensStep(S(i,i)+S(j,j),S(j,i)-S(i,j));
         Eigen::Matrix3f G;
 
+        // Generates Givens matrix in i,j
         G << 1,0,0,0,1,0,0,0,1;
 
         G(i,i) = GivensStep.c;
@@ -551,6 +557,7 @@ void My_Polar(const Eigen::Matrix3f& F,Eigen::Matrix3f& R,Eigen::Matrix3f& S){
         G(i,j) = GivensStep.s;
         G(j,i) = -G(i,j);
 
+        // Iterates R and S, ensuring that R*S = F while working on getting them to desired form
         R=R*G;
         S=G.transpose()*S;
       }
@@ -572,14 +579,41 @@ void My_Polar(const Eigen::Matrix3f& F,Eigen::Matrix3f& R,Eigen::Matrix3f& S){
 
 int main()
 {
-  //Eigen::Matrix2f F,U,sigma,V;
-  //F << 3948.2093, 232.30293, 0.238493852,0.00034895984;
-  //My_SVD(F,U,sigma,V);
+  // Some test cases for SVD decomposition, with sigma generated to have weird values
+  Eigen::Matrix2f F,U,sigma,V;
+  U << 1/sqrt(2), -1/sqrt(2), 1/sqrt(2), 1/sqrt(2);
+  V << 1/sqrt(3), sqrt(2)/sqrt(3), -sqrt(2)/sqrt(3),1/sqrt(3);
+  sigma << 10, 0, 0, 0;
+  F=U*sigma*V.transpose();
 
-  Eigen::Matrix3f F,R,S;
+  // Check value of F
+  std::cout << "Testing 2x2 SVD..." << std::endl;
+  std::cout << "Input Matrix: " << std::endl;
+  std::cout << F << std::endl;
 
-  F << 1,2,3,4,5,6,7,8,9;
-  My_Polar(F,R,S);
+  std::cout << "Running SVD..." << std::endl << std::endl;
+  My_SVD(F,U,sigma,V);
+
+  // Check that U and V have determinant 1
+  std::cout << "Determinant of U: " << U.determinant() << std::endl;
+  std::cout << "Determinant of V: " << V.determinant() << std::endl;
+
+  // Check that U*sigma*V' is equal to F (or close if machine error can't be helped)
+  std::cout << "Output Matrix :" << std::endl;
+  std::cout << U*sigma*V.transpose() << std::endl << std::endl;
+
+
+  // Test Polar Decomposition
+  Eigen::Matrix3f F2,R,S;
+
+  F2 << 1,2,3,4,5,6,7,8,9;
+  std::cout << "Testing 3x3 Polar..." << std::endl;
+  std::cout << "Input Matrix: " << std::endl;
+  std::cout << F2 << std::endl;
+  My_Polar(F2,R,S);
+
+  std::cout << "Output Matrix: " << std::endl;
+  std::cout << R*S << std::endl;
   bool run_benchmark = false;
   if (run_benchmark) runBenchmark();
 }
